@@ -1,0 +1,165 @@
+---
+- name: Setting up Linux Server
+  hosts: service
+  vars_files:
+    - vars/main.yaml
+  become: yes
+  handlers:
+    - name: Restart DNS
+      service:
+        name: named
+        state: restarted
+  become_method: sudo
+  gather_facts: no
+  tasks:
+    - name: Wait 300 seconds max before starting playbook, but start checking after 5 seconds
+      wait_for_connection:
+        delay: 5
+        timeout: 300
+    
+    - name: Set hostname
+      hostname:
+        name: "{{ new_hostname }}"
+
+    - name: No SELinux
+      ansible.posix.selinux:
+        state: disabled
+
+    - name: Create Directories
+      file:
+        path: "{{ item.name }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        mode: 0755
+      loop:
+        - { name: /etc/named/zones, owner: root, mode: 0755 }
+        - { name: /var/www/html/openshift, owner: "{{ user.name }}", mode: 0755 }
+        - { name: tmp, owner: "{{ user.name }}", mode: 0755 }
+        - { name: install_dir,  owner: "{{ user.name }}", mode: 0755 }
+
+    - name: Install httpd, haproxy
+      yum:
+        state: present
+        name:
+        - bind       # "bind" for CentOS, "bind9" for Ubuntu
+        - bind-utils # "bind-utils" for CentOS, "bind9-utils" for Ubuntu 
+        - nginx
+        - haproxy
+        - syslinux
+        update_cache: yes
+
+    - name: Moving Config files
+      template:
+        src:  "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        mode: 0644
+      with_items:
+        - { src: templates/dns-forward.j2, dest: /etc/named/zones/db.forward }
+        - { src: templates/dns-reverse.j2, dest: /etc/named/zones/db.reverse }
+        - { src: templates/named.conf.j2, dest: /etc/named.conf }
+        - { src: templates/named.conf.local.j2, dest: /etc/named/named.conf.local }
+        - { src: templates/nginx.conf.j2, dest: /etc/nginx/nginx.conf }
+        - { src: templates/haproxy.cfg.j2, dest: /etc/haproxy/haproxy.cfg }
+        - { src: templates/install-config.yaml.j2, dest: install_dir/install-config.yaml }
+        - { src: templates/resolv.conf.j2, dest: install_dir/install-config.yaml }
+
+    # Need this here, just to make sure we have a working name resolution for packages installation
+    - name: Overwrite resolv.conf
+      template:
+        src:  templates/resolv.conf.j2
+        dest: /etc/resolv.conf
+        owner: root
+        mode: 0644
+
+    - name: Fix NetworkManager.cnf
+      lineinfile:
+        path: /etc/NetworkManager/NetworkManager.conf
+        insertafter: '[main]'
+        line: 'dns=none'
+      notify:
+        - Restart DNS
+
+    - name: Enable Services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: restarted
+      with_items:
+        - named
+        - haproxy
+        - nginx
+
+    - name: Setup OCP Services
+      get_url: 
+        url: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: 0644
+      with_items:
+        - { src: "{{ openshift.client }}", dest: tmp/client.tar.gz }
+        - { src: "{{ openshift.install }}", dest: tmp/install.tar.gz }
+        - { src: "{{ jq_file }}", dest: tmp/jq }
+    
+    - name: Extract and copy the binaries
+      shell: |
+        cd tmp 
+        tar -xvzf install.tar.gz
+        rm install.tar.gz
+        strip openshift-install
+        mv openshift-install /usr/local/bin/
+        tar -xvzf client.tar.gz
+        rm client.tar.gz
+        strip kubectl
+        mv oc kubectl /usr/local/bin/
+
+    # Generating the key that will be used by OKD to communicate will all nodes.
+    - name: keygen
+      community.crypto.openssh_keypair:
+        path: "{{ user.home }}/.ssh/ssh_okd"
+        owner: "{{ user.name }}"
+
+    - name: get remote file contents
+      command: "cat '{{ user.home }}'/.ssh/ssh_okd.pub"
+      register: key
+
+    - name: Add SSH key to install-config.yaml
+      vars:
+        sshkey: "{{ key.stdout }}"
+      lineinfile:
+        path: "{{ user.home}}/install_dir/install-config.yaml"
+        regexp: '^sshKey:'
+        line: "sshKey: '{{ sshkey }}' " 
+        backup: yes
+    # Get the pull secret from ~/pull_secret.txt. If you don't have one, create the file and add '{"auths":{"fake":{"auth": "bar"}}}' as the content
+    - name: Add Pull Secret to install-config.yaml
+      vars:
+        pull: "{{ lookup('file', './files/pull-secret.txt') }}"
+      lineinfile: 
+        path: "{{ user.home}}/install_dir/install-config.yaml"
+        regexp: '^pullSecret:'
+        # To make sure you don't run into escaping quotes, double quotes... 
+        #just make sure your pull secret in the file is between single quotes, and double quotes everywhere else :!env_var 
+        # For instance: '{"auths":{"fake":{"auth": "bar"}}}'
+        line: "pullSecret: {{ pull }}"   
+        backup: yes       
+    # Let's create the proper OKD installation files (ignition, manifests, ...)
+    - name: Create the install files
+      shell: |
+        /usr/local/bin/openshift-install create manifests --dir=install_dir/
+        cp install_dir/install-config.yaml install-config.back
+        sed -i 's/mastersSchedulable: true/mastersSchedulable: False/' install_dir/manifests/cluster-scheduler-02-config.yml
+        /usr/local/bin/openshift-install create ignition-configs --dir=install_dir/
+
+    # Make these files available on the Web server
+    - name: Copy all files to www directories
+      shell: cp -R install_dir/* /var/www/html/openshift/
+
+    - name: Change www ownership
+      file: 
+        path: /var/www/html/openshift/
+        recurse: yes 
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: 0755
+
