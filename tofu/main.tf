@@ -33,7 +33,7 @@ locals {
         "worker02"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:21", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 704, boot = false, hook = true },
         "worker03"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:22", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 705, boot = false, hook = true },
         "bootstrap"      = { tags = ["ign_bootstrap"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:05", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 707, boot = false, hook = true }
-        "service"        = { tags = ["ign_service"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:02", template_id = resource.proxmox_virtual_environment_vm.centos_stream_template.id, vm_id = 709, boot = true, hook = false }
+        "service"        = { tags = ["ign_service"], size = 10, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:02", template_id = resource.proxmox_virtual_environment_vm.centos_stream_template.id, vm_id = 709, boot = true, hook = false }
     }
     
     bridge  = "VLAN50"
@@ -138,7 +138,7 @@ resource "proxmox_virtual_environment_vm" "redhat_coreos_template" {
         interface       = "scsi0"
         datastore_id    = "${var.template_datastore}"
         file_id         = proxmox_virtual_environment_download_file.redhat_coreos_image.id
-        size            = 16
+        size            = 100
     }
         
 }
