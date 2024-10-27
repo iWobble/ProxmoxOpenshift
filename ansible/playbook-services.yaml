@@ -1,5 +1,5 @@
 ---
-- name: Setting up Linux Server
+- name: Setting up Server
   hosts: service
   vars_files:
     - vars/main.yaml
@@ -25,18 +25,6 @@
       ansible.posix.selinux:
         state: disabled
 
-    - name: Create Directories
-      file:
-        path: "{{ item.name }}"
-        state: directory
-        owner: "{{ item.owner }}"
-        mode: 0755
-      loop:
-        - { name: /etc/named/zones, owner: root, mode: 0755 }
-        - { name: /var/www/html/openshift, owner: "{{ user.name }}", mode: 0755 }
-        - { name: tmp, owner: "{{ user.name }}", mode: 0755 }
-        - { name: install_dir,  owner: "{{ user.name }}", mode: 0755 }
-
     - name: Install httpd, haproxy
       yum:
         state: present
@@ -48,6 +36,19 @@
         - syslinux
         update_cache: yes
 
+    - name: Create Directories
+      file:
+        path: "{{ item.name }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        mode: 0755
+      loop:
+        - { name: /etc/named/zones, owner: root, mode: 0755 }
+        - { name: /var/www/html/openshift, owner: "nginx", mode: 0755 }
+        - { name: tmp, owner: "{{ user.name }}", mode: 0755 }
+        - { name: install_dir,  owner: "{{ user.name }}", mode: 0755 }
+
+ 
     - name: Moving Config files
       template:
         src:  "{{ item.src }}"
@@ -62,7 +63,6 @@
         - { src: templates/nginx.conf.j2, dest: /etc/nginx/nginx.conf }
         - { src: templates/haproxy.cfg.j2, dest: /etc/haproxy/haproxy.cfg }
         - { src: templates/install-config.yaml.j2, dest: install_dir/install-config.yaml }
-        - { src: templates/resolv.conf.j2, dest: install_dir/install-config.yaml }
 
     # Need this here, just to make sure we have a working name resolution for packages installation
     - name: Overwrite resolv.conf
@@ -150,9 +150,16 @@
         sed -i 's/mastersSchedulable: true/mastersSchedulable: False/' install_dir/manifests/cluster-scheduler-02-config.yml
         /usr/local/bin/openshift-install create ignition-configs --dir=install_dir/
 
+
+    - name: Set Kubeconfig env
+      lineinfile:
+        path: "{{ user.home }}/.bash_profile"
+        regexp: '^export KUBECONFIG='
+        line: "export KUBECONFIG={{ user.home }}/install_dir/auth/kubeconfig"
+
     # Make these files available on the Web server
     - name: Copy all files to www directories
-      shell: cp -R install_dir/* /var/www/html/openshift/
+      shell: cp -R install_dir/*.ign /var/www/html/openshift/
 
     - name: Change www ownership
       file: 
