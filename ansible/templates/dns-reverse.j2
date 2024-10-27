@@ -1,6 +1,6 @@
 {# DNS reverse zone file #}
 $TTL    604800
-@       IN      SOA     {{ service_node.name }}.{{ dns.domain }}. admin.{{ dns.domain }}. (
+@       IN      SOA     {{ service_node.name }}.{{ dns.clusterid }}.{{ dns.domain }}. admin.{{ dns.domain }}. (
                   6     ; Serial
              604800     ; Refresh
               86400     ; Retry
@@ -9,18 +9,18 @@ $TTL    604800
 )
 
 ; name servers - NS records
-    IN      NS      {{ service_node.name }}.{{ dns.domain }}.
+    IN      NS      {{ service_node.name }}.{{ dns.clusterid }}.{{ dns.domain }}.
 
 ; name servers - PTR records
-{{ service_node.ip.split('.')[3] }}    IN    PTR    {{ service_node.name }}.{{ dns.domain }}.
+{{ service_node.ip.split('.')[3] }}     IN    PTR    {{ service_node.name }}.{{ dns.clusterid }}.{{ dns.domain }}.
 
 ; OpenShift Container Platform Cluster - PTR records
-{{ bootstrap_node.ip.split('.')[3] }}    IN    PTR    {{ bootstrap_node.name}}.{{ dns.clusterid }}.{{ dns.domain }}.
-{% for mst in master_nodes %}
-{{ mst.ip.split('.')[3] }}    IN    PTR    {{ mst.name }}.{{ dns.clusterid}}.{{ dns.domain }}.
+{{ bootstrap_node.ip.split('.')[3] }}   IN    PTR    {{ bootstrap_node.name }}.{{ dns.clusterid }}.{{ dns.domain }}.
+{% for machine in master_nodes %}
+{{ machine.ip.split('.')[3] }}          IN    PTR    {{ machine.name }}.{{ dns.clusterid }}.{{ dns.domain }}.
 {% endfor %}
-{% for wrk in worker_nodes %}
-{{ wrk.ip.split('.')[3] }}    IN    PTR    {{ wrk.name }}.{{ dns.clusterid}}.{{ dns.domain }}.
+{% for machine in worker_nodes %}
+{{ machine.ip.split('.')[3] }}          IN    PTR    {{ machine.name }}.{{ dns.clusterid }}.{{ dns.domain }}.
 {% endfor %}
-{{ service_node.ip.split('.')[3] }}    IN    PTR    api.{{ dns.clusterid}}.{{ dns.domain }}.
-{{ service_node.ip.split('.')[3] }}    IN    PTR    api-int.{{ dns.clusterid}}.{{ dns.domain }}.
+{{ service_node.ip.split('.')[3] }}     IN    PTR    api.{{ dns.clusterid }}.{{ dns.domain }}.
+{{ service_node.ip.split('.')[3] }}     IN    PTR    api-int.{{ dns.clusterid }}.{{ dns.domain }}.

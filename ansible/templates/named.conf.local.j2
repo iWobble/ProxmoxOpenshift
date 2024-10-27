@@ -1,4 +1,4 @@
-zone "{{ dns.domain }}" {
+zone "{{ dns.clusterid }}.{{ dns.domain }}" {
     type master;
     file "/etc/named/zones/db.forward"; 
 };
