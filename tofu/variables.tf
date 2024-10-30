@@ -78,5 +78,7 @@ variable "centos_vmid" {
     default         = 901
 }
 
-
-
+variable "install_type" {
+    description     = "Single or Mult Node Cluster"
+    default         = "multi_node"
+}

@@ -23,34 +23,38 @@ provider "proxmox" {
     }
 }
 
-
 locals {
-    vm_settings = {
-        "master01"       = { tags = ["ign_master"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:10", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 700, boot = false, hook = true },
-        "master02"       = { tags = ["ign_master"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:11", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 701, boot = false, hook = true },
-        "master03"       = { tags = ["ign_master"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:12", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 702, boot = false, hook = true },
-        "worker01"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:20", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 703, boot = false, hook = true },
-        "worker02"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:21", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 704, boot = false, hook = true },
-        "worker03"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:22", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 705, boot = false, hook = true },
-        "bootstrap"      = { tags = ["ign_bootstrap"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:05", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 707, boot = false, hook = true }
-        "service"        = { tags = ["ign_service"], size = 10, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:02", template_id = resource.proxmox_virtual_environment_vm.centos_stream_template.id, vm_id = 709, boot = true, hook = false }
+    lm_settings = {
+        service_node = {
+            "service"        = { tags = ["ign_service"], size = 10, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:02", file_id = resource.proxmox_virtual_environment_download_file.centos_cloud_image.id, vm_id = 709, boot = true, hook = true }
+        }
+
+        multi_node = {
+            #"master01"       = { tags = ["ign_master"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:10", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 700, boot = false, hook = true },
+            #"master02"       = { tags = ["ign_master"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:11", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 701, boot = false, hook = true },
+            #"master03"       = { tags = ["ign_master"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:12", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 702, boot = false, hook = true },
+            #"worker01"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:20", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 703, boot = false, hook = true },
+            #"worker02"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:21", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 704, boot = false, hook = true },
+            #"worker03"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:22", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 705, boot = false, hook = true },
+            #"bootstrap"      = { tags = ["ign_bootstrap"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:05", template_id = resource.proxmox_virtual_environment_vm.redhat_coreos_template.id, vm_id = 707, boot = false, hook = true }
+        }
+
+        single_node = {
+            "master01"       = { tags = ["ign_bootstrap-in-place-for-live-iso"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:13", file_id = resource.proxmox_virtual_environment_download_file.redhat_coreos_live_iso_master.id, vm_id = 700, boot = false, hook = true },
+            #"worker01"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:20", file_id = resource.proxmox_virtual_environment_download_file.redhat_coreos_live_iso_worker.id, vm_id = 703, boot = false, hook = true },
+            #"worker02"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:21", file_id = resource.proxmox_virtual_environment_download_file.redhat_coreos_live_iso_worker.id, vm_id = 704, boot = false, hook = true },
+            #"worker03"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:22", file_id = resource.proxmox_virtual_environment_download_file.redhat_coreos_live_iso_worker.id, vm_id = 705, boot = false, hook = true },
+        }
     }
-    
+ 
     bridge  = "VLAN50"
     lxc_settings = {
     }
 }
 
-
-# Not using right now
-#data "proxmox_virtual_environment_datastores" "proxmox_node" {
-#    node_name   = "${var.node_name}"
-#}
-
 data "local_file" "public_ssh_key" {
   filename = "/home/${var.user}/.ssh/id_rsa.pub"
 }
-
 
 resource "proxmox_virtual_environment_download_file" "redhat_coreos_image" {
     content_type            = "iso"
@@ -60,6 +64,26 @@ resource "proxmox_virtual_environment_download_file" "redhat_coreos_image" {
     decompression_algorithm = "zst"
     file_name               = "RedHat-CoreOS-${var.rhcos_version}-${var.rhcos_platform}.x86_64.img"
     overwrite               = false
+}
+
+resource "proxmox_virtual_environment_download_file" "redhat_coreos_live_iso_master" {
+    content_type            = "iso"
+    datastore_id            = "${var.template_datastore}"
+    node_name               = "${var.node_name}"
+    url                     = "https://rhcos.mirror.openshift.com/art/storage/prod/streams/${var.rhcos_stream}/builds/${var.rhcos_version}/x86_64/rhcos-${var.rhcos_version}-live.x86_64.iso"
+    file_name               = "RedHat-CoreOS-${var.rhcos_version}-live.x86_64-master.iso"
+    overwrite               = false
+
+}
+
+resource "proxmox_virtual_environment_download_file" "redhat_coreos_live_iso_worker" {
+    content_type            = "iso"
+    datastore_id            = "${var.template_datastore}"
+    node_name               = "${var.node_name}"
+    url                     = "https://rhcos.mirror.openshift.com/art/storage/prod/streams/${var.rhcos_stream}/builds/${var.rhcos_version}/x86_64/rhcos-${var.rhcos_version}-live.x86_64.iso"
+    file_name               = "RedHat-CoreOS-${var.rhcos_version}-live.x86_64-worker.iso"
+    overwrite               = false
+
 }
 
 resource "proxmox_virtual_environment_download_file" "centos_cloud_image" {
@@ -143,57 +167,54 @@ resource "proxmox_virtual_environment_vm" "redhat_coreos_template" {
         
 }
 
-resource "proxmox_virtual_environment_vm" "centos_stream_template" {
-    name            = "CentOS-${var.centos_version}-template"
-    node_name       = "${var.node_name}"
+resource "proxmox_virtual_environment_vm" "redhat_coreos_iso" {
+    for_each        = local.lm_settings.single_node
+    name            = each.key
+    node_name       = var.node_name
+    vm_id           = each.value.vm_id
   
     description     = <<-EOT
-    Cloned from: 
-    Centos Stream ${var.centos_stream} - ${var.centos_version} Template
+    Created From from: 
+    Centos Stream ${var.centos_stream} - ${var.centos_version}
     - Version:      ${var.centos_version}
     - CloudInit:    true
     
     EOT
 
-    vm_id           = "${var.centos_vmid}"
-    on_boot         = false
-    started         = false
-    template        = true
-
     tablet_device   = false
     stop_on_destroy = true
     
+    on_boot         = each.value.boot
+    started         = each.value.boot
 
-    boot_order      = ["scsi0"]
+
     operating_system {
         type        = "l26"
     }
-    
-    agent {
+
+    cdrom {
         enabled     = true
+        file_id     = each.value.file_id
     }
 
     cpu {
-        cores       = 4
+        cores       = each.value.cores
         hotplugged  = 0
         type        = "host"
-
     }
     
     memory {
-        dedicated   = 4096
+        dedicated   = each.value.ram
     }
 
-    network_device {
-        model   = "virtio"
-    }
+    tags            = each.value.tags
 
     initialization {
-        datastore_id    = "${var.template_datastore}"
+        datastore_id = "${var.template_datastore}"
         user_account {
-            keys     = [trimspace(data.local_file.public_ssh_key.content)]
-            username = "${var.user}"
-            password = "${var.passwd}"
+            keys        = [trimspace(data.local_file.public_ssh_key.content)]
+            username    = "${var.user}"
+            password    = "${var.passwd}"
         }
         ip_config {
             ipv4 {
@@ -202,22 +223,90 @@ resource "proxmox_virtual_environment_vm" "centos_stream_template" {
         }
     }
 
+    disk {
+        interface    = "scsi0"
+        datastore_id = "${var.template_datastore}"
+        size         = each.value.size
+    }
+
+    network_device {
+        bridge      = local.bridge
+        mac_address = each.value.mac_addr
+    }
+
+    hook_script_file_id = each.value.hook == true ? proxmox_virtual_environment_file.hook_rhcos.id : ""
+}
+
+resource "proxmox_virtual_environment_vm" "centos_stream_service" {
+    for_each        = local.lm_settings.service_node
+    name            = each.key
+    node_name       = var.node_name
+    vm_id           = each.value.vm_id
+  
+    description     = <<-EOT
+    Created From from: 
+    Centos Stream ${var.centos_stream} - ${var.centos_version}
+    - Version:      ${var.centos_version}
+    - CloudInit:    true
+    
+    EOT
+
+    tablet_device   = false
+    stop_on_destroy = true
+    
+    on_boot         = each.value.boot
+    started         = each.value.boot
+
+    cpu {
+        cores       = each.value.cores
+        hotplugged  = 0
+        type        = "host"
+    }
+    
+    memory {
+        dedicated   = each.value.ram
+    }
+
+    tags            = each.value.tags
+
+    initialization {
+        datastore_id = "${var.template_datastore}"
+        user_account {
+            keys        = [trimspace(data.local_file.public_ssh_key.content)]
+            username    = "${var.user}"
+            password    = "${var.passwd}"
+        }
+        ip_config {
+            ipv4 {
+                address = "dhcp"
+            }
+        }
+    }
+
+    disk {
+        interface    = "scsi0"
+        datastore_id = "${var.template_datastore}"
+        size         = each.value.size
+        file_id      = each.value.file_id
+    }
+
+    network_device {
+        bridge      = local.bridge
+        mac_address = each.value.mac_addr
+    }
+
+    serial_device {}
+
     vga {
         type    = "serial0"
     }
 
-    serial_device {} 
-
-    disk {
-        datastore_id = "${var.template_datastore}"
-        file_id      = proxmox_virtual_environment_download_file.centos_cloud_image.id
-        interface    = "scsi0"
-        size         = 10
-    }
+    hook_script_file_id = each.value.hook == true ? proxmox_virtual_environment_file.hook_rhcos.id : ""
 }
 
 resource "proxmox_virtual_environment_vm" "cloudinit-nodes" {
-    for_each        = local.vm_settings
+    
+    for_each        = local.lm_settings.multi_node
     name            = each.key
 
     node_name       = var.node_name
@@ -259,8 +348,6 @@ resource "proxmox_virtual_environment_vm" "cloudinit-nodes" {
         type    = "serial0"
     }
 
-
-    
     hook_script_file_id = each.value.hook == true ? proxmox_virtual_environment_file.hook_rhcos.id : ""
 }
 
@@ -303,4 +390,3 @@ resource "proxmox_virtual_environment_file" "rhcos_import_template" {
         file_name = "rhcos-import-template.yaml"
     }
 }
-
