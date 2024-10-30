@@ -15,7 +15,10 @@ $TTL    604800
 {{ service_node.ip.split('.')[3] }}     IN    PTR    {{ service_node.name }}.{{ dns.clusterid }}.{{ dns.domain }}.
 
 ; OpenShift Container Platform Cluster - PTR records
+{% if bootstrap_node is defined %}
 {{ bootstrap_node.ip.split('.')[3] }}   IN    PTR    {{ bootstrap_node.name }}.{{ dns.clusterid }}.{{ dns.domain }}.
+{% endif %}
+
 {% for machine in master_nodes %}
 {{ machine.ip.split('.')[3] }}          IN    PTR    {{ machine.name }}.{{ dns.clusterid }}.{{ dns.domain }}.
 {% endfor %}

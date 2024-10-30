@@ -49,7 +49,9 @@ frontend api-server-6443
 backend api-server-6443-be
     balance source
     mode tcp
+{% if bootstrap_node is defined %}    
     server      {{ bootstrap_node.name }} {{ bootstrap_node.ip }}:6443 check
+{% endif %} 
 {% for machine in  master_nodes %}
     server      {{ machine.name }} {{ machine.ip }}:6443 check
 {% endfor %}
@@ -63,8 +65,9 @@ frontend machine-config-server-22623
 backend machine-config-server-22623-be
     balance source
     mode tcp
+{% if bootstrap is defined %} 
     server      {{ bootstrap_node.name }} {{ bootstrap_node.ip }}:22623 check
-
+{% endif %}
 {% for machine in  master_nodes %}
     server      {{ machine.name }} {{ machine.ip }}:22623 check
 {% endfor %}
@@ -78,7 +81,11 @@ frontend ingress-router-443
 backend ingress-router-443-be
     balance source
     mode tcp
-
+{% if bootstrap is not defined %}
+{% for machine in  master_nodes %}
+    server      {{ machine.name }} {{ machine.ip }}:443 check
+{% endfor %}
+{% endif %}
 {% for machine in  worker_nodes %}
     server      {{ machine.name }} {{ machine.ip }}:443 check
 {% endfor %}
@@ -92,6 +99,11 @@ frontend ingress-router-80
 backend ingress-router-80-be
     balance source
     mode tcp
+{% if bootstrap is not defined %}
+{% for machine in  master_nodes %}
+    server      {{ machine.name }} {{ machine.ip }}:80 check
+{% endfor %}
+{% endif %}
 {% for machine in  worker_nodes %}
     server      {{ machine.name }} {{ machine.ip }}:80 check
 {% endfor %}

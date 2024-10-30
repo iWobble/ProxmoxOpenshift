@@ -6,12 +6,12 @@ metadata:
 compute:
 - hyperthreading: Enabled
   name: worker
-  replicas: 3
+  replicas: {{ worker_nodes | length }}
 
 controlPlane:
   hyperthreading: Enabled
   name: master
-  replicas: 3
+  replicas: {{ master_nodes |  length }}
 
 networking:
   clusterNetwork:
@@ -23,6 +23,11 @@ networking:
 
 platform:
   none: {}
+
+{% if master_nodes | length == 1 %}
+bootstrapInPlace:
+  installationDisk: {{ installation_disk }}
+{% endif %}
 
 pullSecret: "{'auths':{'fake':{'auth': 'bar'}}}"
 sshKey: 'ssh-ed25519 AAAA...'   

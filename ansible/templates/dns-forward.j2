@@ -17,7 +17,9 @@ $TTL    604800
 {{ service_node.name }}.{{ dns.clusterid }}.{{ dns.domain }}.               IN      A     {{ service_node.ip }}
 
 ; OpenShift Container Platform Cluster - A records
+{% if bootstrap_node is defined %}
 {{ bootstrap_node.name }}.{{ dns.clusterid }}.{{ dns.domain }}.             IN      A     {{ bootstrap_node.ip }}
+{% endif %}
 
 {% for machine in  master_nodes %}
 {{ machine.name }}.{{ dns.clusterid }}.{{ dns.domain }}.                    IN      A     {{ machine.ip }}

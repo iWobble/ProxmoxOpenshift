@@ -2,7 +2,8 @@
 - name: Setting up Server
   hosts: service
   vars_files:
-    - vars/main.yaml
+    - vars/default.yaml
+    - vars/{{ install_type }}/main.yaml
   become: yes
   handlers:
     - name: Restart DNS
@@ -143,13 +144,18 @@
         line: "pullSecret: {{ pull }}"   
         backup: yes       
     # Let's create the proper OKD installation files (ignition, manifests, ...)
-    - name: Create the install files
+    - name: Create the install files for multi_node
       shell: |
         /usr/local/bin/openshift-install create manifests --dir=install_dir/
-        cp install_dir/install-config.yaml install-config.back
+        cp install_dir/install-config.yaml ../install-config.back
         sed -i 's/mastersSchedulable: true/mastersSchedulable: False/' install_dir/manifests/cluster-scheduler-02-config.yml
         /usr/local/bin/openshift-install create ignition-configs --dir=install_dir/
+      when: install_type is defined and install_type == 'multi_node' 
 
+    - name: Create the install files for single_node
+      shell: |
+        /usr/local/bin/openshift-install create single-node-ignition-config --dir=install_dir/
+      when: install_type is defined and install_type == 'single_node' 
 
     - name: Set Kubeconfig env
       lineinfile:
