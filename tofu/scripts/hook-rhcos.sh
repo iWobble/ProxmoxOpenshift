@@ -6,24 +6,38 @@ package=hook_rhcos.sh
 VMID=$1
 PHASE=$2
 FORCE=""
+OUTPUT=false
+TYPE=ign
 
 while test $# -gt 2; do
   case "$3" in
-    -h|--help)
-      echo "$package - generate ignition files for coreos"
+    -h)
+      echo "$package - generate ignition or machineconfigs files for coreos"
       echo " "
       echo "$package VMID PHASE [options]"
       echo " "
       echo "options:"
-      echo "-h, --help                show brief help"
-      echo "-f, --force               force regeneration if ign file"
+      echo "-o			  output to stndout"
+      echo "-t			  ign, machineconfig"
+      echo "-h                    show brief help"
+      echo "-f 	                  force regeneration if ign file"
       exit 0
       ;;
-    -f)
-      export FORCE=true
+   -t)
+      shift
+      if test $# -gt 0 ; then
+        export TYPE=$3
+      else
+        echo "no format specified"
+        exit 1
+      fi
       shift
       ;;
-    --force)
+    -o)
+      export OUTPUT=true
+      shift
+      ;;
+    -f)
       export FORCE=true
       shift
       ;;
@@ -40,7 +54,6 @@ COREOS_IMPORT_TEMPLATE=/var/lib/vz/snippets/rhcos-import-template.yaml
 COREOS_FILES_PATH=/etc/pve/rhcos-pve/coreos
 YQ="/usr/local/bin/yq -e -P "
 TEMPDIR="/tmp"
-
 
 # ==================================================================================================================================================================
 # functions()
@@ -73,26 +86,6 @@ setup_yq()
 }
 setup_yq
 
-setup_podman()
-{
-        #local VER=5.2.5
-	#local ARCH=amd64
-	#local OS=
-	#local DOWNLOAD_URL=https://github.com/containers/podman/releases/download
-
-
-
-        #[[ -x /usr/bin/wget ]]&& download_command="wget --quiet --show-progress --output-document - "  || download_command="curl --silent --location " 
-	[[ -x /usr/local/podman ]]&& [[ "x$(/usr/local/podman --version | awk '{print $NF}')" == "x${VER}" ]]&& return 0
-	echo "Setup Podman... "
-        rm -f /usr/local/bin/podman
-	${download_command} https://github.com/containers/podman/releases/download/v${VER}/podman-remote-static-linux_${ARCH}.tar.gz | tar -xvz -C /tmp
-	mv /tmp/bin/podman-remote-static-linux_${ARCH} /usr/local/bin/podman
-	chmod 755 /usr/local/bin/podman
-
-}
-
-
 cleanup()
 {
 	${WORKDIR:-false} || [[ -d $WORK_DIR ]] && {
@@ -107,14 +100,18 @@ cleanup()
 
 pre-start()
 {
-	instance_id="$(qm cloudinit dump ${VMID} meta | ${YQ} '.instance-id')"
 	
-	echo "Checking CloudInit for VM${VMID} (${instance_id})... "
+	instance_id="$(qm cloudinit dump ${VMID} meta | ${YQ} '.instance-id')"
+	# Set the Type output.  If type yaml were expecting a machineconfig
+	([[ ${TYPE} != "ign" ]]) && TYPE="yaml"
+	
+	echo "CoreOS: Generate Machine Config File... "
 	# same cloudinit config 
 	([[ ${FORCE} == "true" ]] || ([[ -e ${COREOS_FILES_PATH}/${VMID}.id ]] && [[ "x${instance_id}" != "x$(cat ${COREOS_FILES_PATH}/${VMID}.id)" ]])) && {
 		rm -f ${COREOS_FILES_PATH}/${VMID}.ign # cloudinit config change
+		rm -f ${COREOS_FILES_PATH}/${VMID}-machineconfig.yaml
 	}
-	[[ -e ${COREOS_FILES_PATH}/${VMID}.ign ]] && echo "Ignition File for VM${VMID} already exists. Use -f to force recreation" && exit 0 # already done
+	[[ -e ${COREOS_FILES_PATH}/${VMID}.ign ]] || [[ -e ${COREOS_FILES_PATH}/${VMID}-machineconfig.yaml ]] && echo "Ignition File for VM${VMID} already exists. Use -f to force recreation" && exit 0 # already done
 
 	mkdir -p ${COREOS_FILES_PATH} || exit 1
 		
@@ -123,7 +120,7 @@ pre-start()
 	[[ "x${cipasswd}" != "x" ]]&& VALIDCONFIG=true
 	${VALIDCONFIG:-false} || [[ "x$(qm cloudinit dump ${VMID} user | ${YQ} '.ssh_authorized_keys[]')" == "x" ]] || VALIDCONFIG=true
 	${VALIDCONFIG:-false} || {
-		echo "Red Hat CoreOS: you must set passwd or ssh-key before start VM${VMID}"
+		echo "CoreOS: you must set passwd or ssh-key before start VM${VMID}"
 		exit 1
 	}
 
@@ -136,38 +133,51 @@ pre-start()
 	[[ "x${importserver}" == "x" ]] && echo "Missing Merge source in ${COREOS_IMPORT_TEMPLATE}" && exit 1 
 	${VALIDTAG:-false} || [[ "x$(qm config ${VMID} | grep -q 'tags' | grep -q 'ign_' )" == "x" ]] && VALIDTAG=true
 	${VALIDTAG:-false} || {
-		echo "Red Hat CoreOS: You must specifiy a 'ign_TAG' where TAG matches ignition file at ${importserver}"
+		echo "CoreOS: You must specifiy a 'ign_TAG' where TAG matches ignition file at ${importserver}"
 		exit 1
 	}
 	igntag="$(qm config ${VMID} | grep 'tags' | ${YQ} '.tags' 2> /dev/null | grep 'ign_' | sed -e 's/ign_//')" || exit 1
 	#Get All the tags
 	#readarray tags < <(qm config ${VMID} | grep 'tags' | ${YQ} '.tags | split(";")')
 	#for tag in "${tags[@]}"; do  echo $tag | grep 'ign_' | sed -e 's/^- ign_//g'; done
-	echo -e "Applying Merge for Ignition tag: $(echo ${importserver} | sed -e 's/TAG/'${igntag}'/')"
-	echo -e "Red Hat CoreOS: Generating YAML File... "
+	[[ ${TYPE} == "yaml" ]] && VARIANT="openshift" || VARIANT="fcos" 
+	[[ ${VARIANT} == "openshift" ]] && VERSION='4.17.0' || VERSION='1.5.0' 
+	#echo -e "CoreOS: Applying Merge for Ignition tag: $(echo ${importserver} | sed -e 's/TAG/'${igntag}'/')"
 	echo -e "# This file is managed by RHCOS hook-script. Do not edit.\n" > ${COREOS_FILES_PATH}/${VMID}.yaml
-	echo -e "variant: fcos\nversion: 1.5.0" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+	echo -e "---\nvariant: ${VARIANT}\nversion: ${VERSION} " >> ${COREOS_FILES_PATH}/${VMID}.yaml
 	[[ -e "${COREOS_IMPORT_TEMPLATE}" &&  -n "${igntag}" ]]&& {
-		echo -n "Red Hat CoreOS: Generating Config block for tag: ${igntag} based on template ${VMID}... "
-		echo -e "ignition:" >> ${COREOS_FILES_PATH}/${VMID}.yaml
-		echo -e "  config:" >> ${COREOS_FILES_PATH}/${VMID}.yaml
-		sed -e "s/TAG/${igntag}/g" -- "${COREOS_IMPORT_TEMPLATE}" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+		[[ ${VARIANT} == 'fcos' ]] && {
+			echo -n "CoreOS: Generate yaml config block... "
+			echo -e "ignition:" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+			echo -e "  config:" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+			sed -e "s/TAG/${igntag}/g" -- "${COREOS_IMPORT_TEMPLATE}" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+			echo "[done]"
+		}
+	}
+	[[ ${VARIANT} == "openshift" ]] && {
+		echo -n "CoreOS: Generate yaml metadata block... "
+		echo -e "metadata:" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+		echo -e "  name: 99-${igntag}-pve" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+		echo -e "  labels:\n    machineconfiguration.openshift.io/role: ${igntag}" >> ${COREOS_FILES_PATH}/${VMID}.yaml
 		echo "[done]"
-	}	
-	echo -n "Red Hat CoreOS: Generate yaml users block... "
+	}
+
+	[[ ${VARIANT} == "fcos" ]] && ciuser="$(qm cloudinit dump ${VMID} user 2> /dev/null | grep ^user: | awk '{print $NF}')" || ciuser="core"
+		
+	echo -n "CoreOS: Generate yaml users block... "
 	echo -e "# user\npasswd:\n  users:" >> ${COREOS_FILES_PATH}/${VMID}.yaml
-	ciuser="$(qm cloudinit dump ${VMID} user 2> /dev/null | grep ^user: | awk '{print $NF}')"
 	echo "    - name: \"${ciuser:-admin}\"" >> ${COREOS_FILES_PATH}/${VMID}.yaml
-	echo "      gecos: \"CoreOS Administrator\"" >> ${COREOS_FILES_PATH}/${VMID}.yaml
-	echo "      password_hash: '${cipasswd}'" >> ${COREOS_FILES_PATH}/${VMID}.yaml
-	echo '      groups: [ "sudo", "adm", "wheel", "systemd-journal" ]' >> ${COREOS_FILES_PATH}/${VMID}.yaml
+	[[ ${VARIANT} == "fcos" ]] && {
+		echo "      gecos: \"CoreOS Administrator\"" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+		echo "      password_hash: '${cipasswd}'" >> ${COREOS_FILES_PATH}/${VMID}.yaml
+		echo '      groups: [ "sudo", "adm", "wheel", "systemd-journal" ]' >> ${COREOS_FILES_PATH}/${VMID}.yaml
+	}
 	echo '      ssh_authorized_keys:' >> ${COREOS_FILES_PATH}/${VMID}.yaml
 	qm cloudinit dump ${VMID} user | ${YQ} '.ssh_authorized_keys[]' | sed -e 's/^/        - "/' -e 's/$/"/' >> ${COREOS_FILES_PATH}/${VMID}.yaml
 	echo >> ${COREOS_FILES_PATH}/${VMID}.yaml
 	echo "[done]"
-
 	
-	echo -n "Red Hat CoreOS: Generate yaml hostname block... "
+	echo -n "CoreOS: Generate yaml hostname block... "
 	hostname="$(qm cloudinit dump ${VMID} user | ${YQ} '.hostname' 2> /dev/null)"
 	echo -e "# network\nstorage:\n  files:" >> ${COREOS_FILES_PATH}/${VMID}.yaml
 	echo "    - path: /etc/hostname" >> ${COREOS_FILES_PATH}/${VMID}.yaml
@@ -178,17 +188,18 @@ pre-start()
 	echo -e "          ${hostname,,}\n" >> ${COREOS_FILES_PATH}/${VMID}.yaml 
 	echo "[done]"
 	
-	echo -n "Red Hat CoreOS: Generate yaml network block... "
-	netcards="$(qm cloudinit dump ${VMID} network | ${YQ} '.config[] | select(.type == "physical").name' 2> /dev/null | wc -l)"
-	nameservers="$(qm cloudinit dump ${VMID} network | ${YQ} '.config[] | select(.type == "nameserver").address[]' | paste -s -d ";" -)"
-	searchdomain="$(qm cloudinit dump ${VMID} network | ${YQ} '.config[] | select(.type == "nameserver").search[]' | paste -s -d ";" -)"
+	echo -n "CoreOS: Generate yaml network block... "
+	network_yaml="$(qm cloudinit dump ${VMID} network | yq -o json 2> /dev/null)"
+	netcards="$(echo ${network_yaml} | ${YQ} -p=json '.config[] | select(.type == "physical").name' 2> /dev/null | wc -l)"
+	nameservers="$( echo ${network_yaml} | ${YQ} -p=json '.config[] | select(.type == "nameserver").address[]' | paste -s -d ";" -)"
+	searchdomain="$(echo ${network_yaml} | ${YQ} -p=json '.config[] | select(.type == "nameserver").search[]' | paste -s -d ";" -)"
 	for (( i=O; i<${netcards}; i++ ))
 	do
 		ipv4="" netmask="" gw="" macaddr="" # reset on each run
-		ipv4="$(qm cloudinit dump ${VMID} network | ${YQ} '.config[${i}].subnets[0].address' 2> /dev/null)" || continue # dhcp
-		netmask="$(qm cloudinit dump ${VMID} network | ${YQ} '.config[${i}].subnets[0].netmask' 2> /dev/null)"
-		gw="$(qm cloudinit dump ${VMID} network | ${YQ} '.config[${i}].subnets[0].gateway' 2> /dev/null)" || true # can be empty
-		macaddr="$(qm cloudinit dump ${VMID} network | ${YQ} '.config[${i}].mac_address' 2> /dev/null)"
+		ipv4="$(echo ${network_yaml} | ${YQ} -p=json '.config[${i}].subnets[0].address' 2> /dev/null)" || continue # dhcp
+		netmask="$(echo ${network_yaml} | ${YQ} -p=json '.config[${i}].subnets[0].netmask' 2> /dev/null)"
+		gw="$(echo ${network_yaml} | ${YQ} -p=json '.config[${i}].subnets[0].gateway' 2> /dev/null)" || true # can be empty
+		macaddr="$(echo ${network_yaml} | ${YQ} -p=json '.config[${i}].mac_address' 2> /dev/null)"
 		# ipv6: TODO
 
 		echo "    - path: /etc/NetworkManager/system-connections/net${i}.nmconnection" >> ${COREOS_FILES_PATH}/${VMID}.yaml
@@ -212,21 +223,33 @@ pre-start()
 	echo "[done]"
 
 	[[ -e "${COREOS_TMPLT}" ]]&& {
-		echo -n "Red Hat CoreOS: Generate other block based on template... "
+		echo -n "CoreOS: Generate yaml template block... "
 		cat "${COREOS_TMPLT}" >> ${COREOS_FILES_PATH}/${VMID}.yaml
 		echo "[done]"
 	}
 
-	echo -n "Red Hat CoreOS: Generating ignition config... "
+
+	#[[ ${OUTPUT} != "true" ]] && OUTPUT=" --output ${COREOS_FILES_PATH}/${VMID}.${TYPE}"
+	#echo $OUTPUT
+
+       # [[ ${OUTPUT} ]] || butane_command="${butane_command} --strict --pretty --output "
+       	OUTNAME=${VMID}.yaml
+	[[ ${VARIANT} == "openshift" ]] && OUTNAME="${VMID}-machineconfig.yaml"
+	echo -n "CoreOS: Generate ${OUTNAME}... "
 	/usr/local/bin/butane --strict \
-			     --output ${COREOS_FILES_PATH}/${VMID}.ign \
-			     ${COREOS_FILES_PATH}/${VMID}.yaml 2> /dev/null
+	       --pretty --output ${COREOS_FILES_PATH}/${OUTNAME} ${COREOS_FILES_PATH}/${VMID}.yaml
+
 
 	[[ $? -eq 0 ]] || {
 		echo "[failed]"
 		exit 1
 	}
 	echo "[done]"
+
+	[[ ${OUTPUT} == "true" ]] && {
+		clear
+		cat ${COREOS_FILES_PATH}/${OUTNAME}
+	}
 	
 	# save cloudinit instanceid
 	echo "${instance_id}" > ${COREOS_FILES_PATH}/${VMID}.id
@@ -239,7 +262,7 @@ pre-start()
 		isofile=$(qm config ${VMID} --current | grep '^ide3' | ${YQ} '.ide3' 2> /dev/null | cut -d ',' -f 1) || true
 		[[ "x${isofile}" != "xnull" ]] && {
 			isopath=$(pvesm path ${isofile})
-			echo -n "Red Hat CoreOS: Live CD Detected: `basename ${isopath}`... "
+			echo -n "CoreOS: Live CD Detected: `basename ${isopath}`... "
 			echo "[done]"
 
 			DIR="$( cd "$( dirname "${COREOS_FILES_PATH}" )" && pwd )"
@@ -256,7 +279,7 @@ pre-start()
 
 	else 
 		# check vm config (no args on first boot)
-		qm config ${VMID} --current | grep ^args || {
+		qm config ${VMID} --current | grep -q ^args || {
 			echo -n "Set args com.coreos/config on VM${VMID}... "
 			rm -f /var/lock/qemu-server/lock-${VMID}.conf
 			pvesh set /nodes/$(hostname)/qemu/${VMID}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${VMID}.ign" 2> /dev/null || {
@@ -266,7 +289,7 @@ pre-start()
 			touch /var/lock/qemu-server/lock-${VMID}.conf
 
 			# hack for reload new ignition file
-			echo -e "\nWARNING: New generated Red Hat CoreOS ignition settings, we must restart vm..."
+			echo -e "\nWARNING: New generated CoreOS ignition settings, we must restart vm..."
 			qm stop ${VMID} && sleep 2 && qm start ${VMID}&
 			exit 1
 		}
