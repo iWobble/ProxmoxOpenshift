@@ -86,9 +86,11 @@ backend ingress-router-443-be
     server      {{ machine.name }} {{ machine.ip }}:443 check
 {% endfor %}
 {% endif %}
+{% if master_nodes | length != 1 %} 
 {% for machine in  worker_nodes %}
     server      {{ machine.name }} {{ machine.ip }}:443 check
 {% endfor %}
+{% endif %}
 
 frontend ingress-router-80
     bind *:80
@@ -104,6 +106,8 @@ backend ingress-router-80-be
     server      {{ machine.name }} {{ machine.ip }}:80 check
 {% endfor %}
 {% endif %}
+{% if master_nodes | length != 1 %} 
 {% for machine in  worker_nodes %}
     server      {{ machine.name }} {{ machine.ip }}:80 check
 {% endfor %}
+{% endif %}
