@@ -100,10 +100,11 @@ cleanup()
 
 pre-start()
 {
-	
 	instance_id="$(qm cloudinit dump ${VMID} meta | ${YQ} '.instance-id')"
 	# Set the Type output.  If type yaml were expecting a machineconfig
 	([[ ${TYPE} != "ign" ]]) && TYPE="yaml"
+
+	mkdir -p ${COREOS_FILES_PATH} || exit 1
 	
 	echo "CoreOS: Generate Machine Config File... "
 	# same cloudinit config 
@@ -113,8 +114,6 @@ pre-start()
 	}
 	[[ -e ${COREOS_FILES_PATH}/${VMID}.ign ]] || [[ -e ${COREOS_FILES_PATH}/${VMID}-machineconfig.yaml ]] && echo "Ignition File for VM${VMID} already exists. Use -f to force recreation" && exit 0 # already done
 
-	mkdir -p ${COREOS_FILES_PATH} || exit 1
-		
 	# check config
 	cipasswd="$(qm cloudinit dump ${VMID} user | ${YQ} '.password' 2> /dev/null)" || true # can be empty
 	[[ "x${cipasswd}" != "x" ]]&& VALIDCONFIG=true
@@ -131,12 +130,15 @@ pre-start()
 	}
 	importserver="$(${YQ} '.merge[] | to_entries[].value' ${COREOS_IMPORT_TEMPLATE} 2> /dev/null)"
 	[[ "x${importserver}" == "x" ]] && echo "Missing Merge source in ${COREOS_IMPORT_TEMPLATE}" && exit 1 
-	${VALIDTAG:-false} || [[ "x$(qm config ${VMID} | grep -q 'tags' | grep -q 'ign_' )" == "x" ]] && VALIDTAG=true
-	${VALIDTAG:-false} || {
+
+	${VALIDIGNTAG:-false} || [[ "x$(qm config ${VMID} | grep -q 'tags' | grep -q 'ign_' )" == "x" ]] && VALIDIGNTAG=true && TAGTYPE='ign'
+	${VALIDISOTAG:-false} || [[ "x$(qm config ${VMID} | grep -q 'tags' | grep -q 'iso_' )" == "x" ]] && VALIDISOTAG=true && TAGTYPE='iso'
+	${VALIDIGNTAG:-false} && ${VALIDISOTAG:-false} || {
 		echo "CoreOS: You must specifiy a 'ign_TAG' where TAG matches ignition file at ${importserver}"
 		exit 1
 	}
-	igntag="$(qm config ${VMID} | grep 'tags' | ${YQ} '.tags' 2> /dev/null | grep 'ign_' | sed -e 's/ign_//')" || exit 1
+
+	igntag="$(qm config ${VMID} | grep 'tags' | ${YQ} '.tags' 2> /dev/null | grep ${TAGTYPE}'_' | sed -e 's/'${TAGTYPE}'_//')" || exit 1
 	#Get All the tags
 	#readarray tags < <(qm config ${VMID} | grep 'tags' | ${YQ} '.tags | split(";")')
 	#for tag in "${tags[@]}"; do  echo $tag | grep 'ign_' | sed -e 's/^- ign_//g'; done
@@ -233,7 +235,7 @@ pre-start()
 	#echo $OUTPUT
 
        # [[ ${OUTPUT} ]] || butane_command="${butane_command} --strict --pretty --output "
-       	OUTNAME=${VMID}.yaml
+       	OUTNAME=${VMID}.ign
 	[[ ${VARIANT} == "openshift" ]] && OUTNAME="${VMID}-machineconfig.yaml"
 	echo -n "CoreOS: Generate ${OUTNAME}... "
 	/usr/local/bin/butane --strict \

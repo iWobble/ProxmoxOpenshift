@@ -45,7 +45,7 @@ variable "template_id" {
 
 variable "rhcos_version" {
     description     = "Red Hat CoreOS Version"
-    default         = "417.94.202408270355-0"
+    default         = "417.94.202410090854-0"
 }
 
 variable "rhcos_platform" {

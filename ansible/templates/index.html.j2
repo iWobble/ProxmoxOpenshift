@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxmox ISO Downloads</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #000; /* Black background */
+            color: #f5f5f5; /* Light text color for readability */
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #cc0000; /* Red Hat OpenShift primary red color */
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background-color: #1a1a1a; /* Dark gray container background */
+            padding: 20px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+        }
+        .download-section {
+            margin-bottom: 20px;
+        }
+        .download-section h2 {
+            color: #ff6666; /* Softer red for subheadings */
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+        .download-section p {
+            font-size: 0.95em;
+            color: #ddd; /* Light gray for paragraphs */
+        }
+        .link {
+            display: inline-block;
+            padding: 10px 20px;
+            margin-top: 10px;
+            color: white;
+            background-color: #cc0000;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .link:hover {
+            background-color: #a80000; /* Darker red for hover effect */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Download ISOs and Ignition Files</h1>
+
+        <!-- Master Node ISO -->
+        <div class="download-section">
+            <h2>Single Node Master ISO</h2>
+            <p>
+                Download the <strong>rhcos-live-master.iso</strong> file for creating a single-node cluster.
+                This ISO should be downloaded to your Proxmox server and attached to the master node.
+            </p>
+            <a href="rhcos-live-master.iso" class="link" download>Download Master ISO</a>
+        </div>
+
+        <!-- Worker Node ISO -->
+        <div class="download-section">
+            <h2>Worker Node ISO</h2>
+            <p>
+                Download the <strong>rhcos-live-worker.iso</strong> file for creating worker nodes to attach to the cluster.
+                This ISO can be attached to multiple worker nodes in your Proxmox server.
+            </p>
+            <a href="rhcos-live-worker.iso" class="link" download>Download Worker ISO</a>
+        </div>
+
+        <!-- Ignition Files for Multi-Node Cluster -->
+        <div class="download-section">
+            <h2>Multi-Node Cluster Ignition Files</h2>
+            <p>
+                For multi-node OpenShift clusters, download the appropriate ignition files below.
+            </p>
+            <ul>
+                <li><a href="master.ign" class="link" download>Download Master Ignition File</a></li>
+                <li><a href="worker.ign" class="link" download>Download Worker Ignition File</a></li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+

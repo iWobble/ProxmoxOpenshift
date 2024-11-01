@@ -1,33 +1,32 @@
+---
 apiVersion: v1
 baseDomain: {{ dns.domain }}
 metadata:
   name: {{ dns.clusterid }}
-
 compute:
 - hyperthreading: Enabled
   name: worker
   replicas: {{ worker_nodes | length }}
-
 controlPlane:
   hyperthreading: Enabled
   name: master
   replicas: {{ master_nodes |  length }}
-
 networking:
   clusterNetwork:
   - cidr: 10.128.0.0/14 
     hostPrefix: 23 
+{% if master_nodes | length == 1 %}
+  machineNetwork:
+  - cidr: 10.0.0.0/16
+{% endif %}  
   networkType: OVNKubernetes
   serviceNetwork: 
   - 172.30.0.0/16
-
 platform:
   none: {}
-
 {% if master_nodes | length == 1 %}
 bootstrapInPlace:
   installationDisk: {{ installation_disk }}
 {% endif %}
-
 pullSecret: "{'auths':{'fake':{'auth': 'bar'}}}"
 sshKey: 'ssh-ed25519 AAAA...'   

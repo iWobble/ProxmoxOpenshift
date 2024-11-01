@@ -1,28 +1,4 @@
 ---
-main_dns: 192.168.9.2
-
-network:
-  home: 192.168.1.0/24
-  lab_cidr: 192.168.50.0/24
-
-dns:
-    domain: iwobble.com
-    clusterid: ocp4
-user:
-  name: jared
-  home: /home/jared
-
-openshift:
-    client: https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz
-    install: https://mirror.openshift.com/pub/openshift-v4/multi/clients/ocp/stable/amd64/openshift-install-linux.tar.gz
-
-jq_file: https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
-
-service_node:
-    name: service
-    ip: 192.168.50.2
-    macaddr: 00:0d:b9:5f:ce:02
-
 bootstrap_node:
     name: bootstrap
     ip: 192.168.50.5

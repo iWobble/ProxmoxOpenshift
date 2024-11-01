@@ -40,10 +40,10 @@ locals {
         }
 
         single_node = {
-            "master01"       = { tags = ["ign_bootstrap-in-place-for-live-iso"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:13", file_id = resource.proxmox_virtual_environment_download_file.redhat_coreos_live_iso_master.id, vm_id = 700, boot = false, hook = true },
-            #"worker01"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:20", file_id = resource.proxmox_virtual_environment_download_file.redhat_coreos_live_iso_worker.id, vm_id = 703, boot = false, hook = true },
-            #"worker02"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:21", file_id = resource.proxmox_virtual_environment_download_file.redhat_coreos_live_iso_worker.id, vm_id = 704, boot = false, hook = true },
-            #"worker03"       = { tags = ["ign_worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:22", file_id = resource.proxmox_virtual_environment_download_file.redhat_coreos_live_iso_worker.id, vm_id = 705, boot = false, hook = true },
+            "master01"       = { tags = ["iso_live-master"], size = 100, cores = 4, ram = 16384, mac_addr = "00:0d:b9:5f:ce:10", vm_id = 700, boot = false, hook = true },
+            "worker01"       = { tags = ["iso_live-worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:20", vm_id = 703, boot = false, hook = true },
+            #"worker02"       = { tags = ["iso_live-worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:21", vm_id = 704, boot = false, hook = true },
+            #"worker03"       = { tags = ["iso_live-worker"], size = 100, cores = 2, ram = 16384, mac_addr = "00:0d:b9:5f:ce:22", vm_id = 705, boot = false, hook = true },
         }
     }
  
@@ -64,26 +64,6 @@ resource "proxmox_virtual_environment_download_file" "redhat_coreos_image" {
     decompression_algorithm = "zst"
     file_name               = "RedHat-CoreOS-${var.rhcos_version}-${var.rhcos_platform}.x86_64.img"
     overwrite               = false
-}
-
-resource "proxmox_virtual_environment_download_file" "redhat_coreos_live_iso_master" {
-    content_type            = "iso"
-    datastore_id            = "${var.template_datastore}"
-    node_name               = "${var.node_name}"
-    url                     = "https://rhcos.mirror.openshift.com/art/storage/prod/streams/${var.rhcos_stream}/builds/${var.rhcos_version}/x86_64/rhcos-${var.rhcos_version}-live.x86_64.iso"
-    file_name               = "RedHat-CoreOS-${var.rhcos_version}-live.x86_64-master.iso"
-    overwrite               = false
-
-}
-
-resource "proxmox_virtual_environment_download_file" "redhat_coreos_live_iso_worker" {
-    content_type            = "iso"
-    datastore_id            = "${var.template_datastore}"
-    node_name               = "${var.node_name}"
-    url                     = "https://rhcos.mirror.openshift.com/art/storage/prod/streams/${var.rhcos_stream}/builds/${var.rhcos_version}/x86_64/rhcos-${var.rhcos_version}-live.x86_64.iso"
-    file_name               = "RedHat-CoreOS-${var.rhcos_version}-live.x86_64-worker.iso"
-    overwrite               = false
-
 }
 
 resource "proxmox_virtual_environment_download_file" "centos_cloud_image" {
@@ -174,11 +154,11 @@ resource "proxmox_virtual_environment_vm" "redhat_coreos_iso" {
     vm_id           = each.value.vm_id
   
     description     = <<-EOT
-    Created From from: 
-    Centos Stream ${var.centos_stream} - ${var.centos_version}
-    - Version:      ${var.centos_version}
-    - CloudInit:    true
-    
+    Created From from:
+    RedHat CoreOS - ${var.rhcos_version}-${var.rhcos_platform}
+    - Version:      ${var.rhcos_version}
+    - Platform:     ${var.rhcos_platform}
+    - CloudInit:    true: 
     EOT
 
     tablet_device   = false
@@ -187,15 +167,14 @@ resource "proxmox_virtual_environment_vm" "redhat_coreos_iso" {
     on_boot         = each.value.boot
     started         = each.value.boot
 
+    boot_order      = ["scsi0"]
 
     operating_system {
         type        = "l26"
     }
 
     cdrom {
-        enabled     = true
-        file_id     = each.value.file_id
-    }
+        enabled     = true    }
 
     cpu {
         cores       = each.value.cores

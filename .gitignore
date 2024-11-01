@@ -1,3 +1,4 @@
 .terraform
 tofu/.terraform/
 ansible/files/pull-secret.txt
+ansible/manifests/*.yaml

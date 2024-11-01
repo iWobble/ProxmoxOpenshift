@@ -1,4 +1,4 @@
----
+---     
 - name: Setting up Server
   hosts: service
   vars_files:
@@ -35,6 +35,7 @@
         - nginx
         - haproxy
         - syslinux
+        - podman
         update_cache: yes
 
     - name: Create Directories
@@ -48,8 +49,8 @@
         - { name: /var/www/html/openshift, owner: "nginx", mode: 0755 }
         - { name: tmp, owner: "{{ user.name }}", mode: 0755 }
         - { name: install_dir,  owner: "{{ user.name }}", mode: 0755 }
+        - { name: isos, owner: "{{ user.name }}", mode: 0755 }
 
- 
     - name: Moving Config files
       template:
         src:  "{{ item.src }}"
@@ -63,7 +64,21 @@
         - { src: templates/named.conf.local.j2, dest: /etc/named/named.conf.local }
         - { src: templates/nginx.conf.j2, dest: /etc/nginx/nginx.conf }
         - { src: templates/haproxy.cfg.j2, dest: /etc/haproxy/haproxy.cfg }
-        - { src: templates/install-config.yaml.j2, dest: install_dir/install-config.yaml }
+        - { src: templates/install-config.yaml.j2, dest: install-config.yaml }
+        - { src: templates/index.html.j2, dest: /var/www/html/openshift/index.html }
+    
+    - name: Remove old manifest files
+      file:
+        state: absent
+        path: manifests_dir/
+
+    - name: Copy any additional manifests
+      copy:
+        src: manifests/
+        dest: manifests_dir/
+        owner: "{{ user.name }}"
+        mode: 0755
+        force: true
 
     # Need this here, just to make sure we have a working name resolution for packages installation
     - name: Overwrite resolv.conf
@@ -105,21 +120,19 @@
       shell: |
         cd tmp 
         tar -xvzf install.tar.gz
-        rm install.tar.gz
         strip openshift-install
         mv openshift-install /usr/local/bin/
         tar -xvzf client.tar.gz
-        rm client.tar.gz
         strip kubectl
         mv oc kubectl /usr/local/bin/
 
     # Generating the key that will be used by OKD to communicate will all nodes.
-    - name: keygen
+    - name: Generate SSH Key for Cluster
       community.crypto.openssh_keypair:
         path: "{{ user.home }}/.ssh/ssh_okd"
         owner: "{{ user.name }}"
 
-    - name: get remote file contents
+    - name: Get Public Key
       command: "cat '{{ user.home }}'/.ssh/ssh_okd.pub"
       register: key
 
@@ -127,35 +140,87 @@
       vars:
         sshkey: "{{ key.stdout }}"
       lineinfile:
-        path: "{{ user.home}}/install_dir/install-config.yaml"
+        path: "{{ user.home}}/install-config.yaml"
         regexp: '^sshKey:'
         line: "sshKey: '{{ sshkey }}' " 
-        backup: yes
+    
+    - name: Determine ISO for Single Node
+      shell: |
+        /usr/local/bin/openshift-install coreos print-stream-json | grep location | grep x86_64 | grep iso | cut -d\" -f4
+      when: install_type is defined and install_type == 'single_node'
+      register: iso_url
+
+    - name: Download ISO for Single Node
+      get_url:
+        url: '{{ iso_url.stdout }}'
+        dest: isos/rhcos-live.iso
+      when: install_type is defined and install_type == 'single_node'
+
     # Get the pull secret from ~/pull_secret.txt. If you don't have one, create the file and add '{"auths":{"fake":{"auth": "bar"}}}' as the content
     - name: Add Pull Secret to install-config.yaml
       vars:
         pull: "{{ lookup('file', './files/pull-secret.txt') }}"
       lineinfile: 
-        path: "{{ user.home}}/install_dir/install-config.yaml"
+        path: "{{ user.home}}/install-config.yaml"
         regexp: '^pullSecret:'
         # To make sure you don't run into escaping quotes, double quotes... 
         #just make sure your pull secret in the file is between single quotes, and double quotes everywhere else :!env_var 
         # For instance: '{"auths":{"fake":{"auth": "bar"}}}'
         line: "pullSecret: {{ pull }}"   
-        backup: yes       
+    
     # Let's create the proper OKD installation files (ignition, manifests, ...)
     - name: Create the install files for multi_node
       shell: |
+        rm -rf install_dir/*
+        cp install-config.yaml install_dir/
         /usr/local/bin/openshift-install create manifests --dir=install_dir/
-        cp install_dir/install-config.yaml ../install-config.back
-        sed -i 's/mastersSchedulable: true/mastersSchedulable: False/' install_dir/manifests/cluster-scheduler-02-config.yml
+        sed -i 's/mastersSchedulable: true/mastersSchedulable: false/' install_dir/manifests/cluster-scheduler-02-config.yml
+        cp manifests_dir/*.yaml install_dir/openshift/
         /usr/local/bin/openshift-install create ignition-configs --dir=install_dir/
+        chown -R {{ user.name }} install_dir/
       when: install_type is defined and install_type == 'multi_node' 
 
     - name: Create the install files for single_node
       shell: |
+        rm -rf install_dir/*
+        cp install-config.yaml install_dir/
+        /usr/local/bin/openshift-install create manifests --dir=install_dir/
+        cp manifests_dir/*.yaml install_dir/openshift/
         /usr/local/bin/openshift-install create single-node-ignition-config --dir=install_dir/
+        chown -R {{ user.name }} install_dir/
       when: install_type is defined and install_type == 'single_node' 
+
+    - name: Generate ISO for Single Node master
+      shell: |
+        cp isos/rhcos-live.iso isos/rhcos-live-master.iso
+        podman run --privileged --pull always --rm \
+          -v /dev:/dev -v /run/udev:/run/udev -v $PWD:/data \
+          -w /data quay.io/coreos/coreos-installer:release \
+          iso ignition embed -fi install_dir/bootstrap-in-place-for-live-iso.ign isos/rhcos-live-master.iso
+          chmod -R 755 isos/
+      when: install_type is defined and install_type == 'single_node'
+
+    - name: Generate ISO for Single Node worker
+      shell: |
+        cp isos/rhcos-live.iso isos/rhcos-live-worker.iso
+        podman run --privileged --pull always --rm \
+          -v /dev:/dev -v /run/udev:/run/udev -v $PWD:/data \
+          -w /data quay.io/coreos/coreos-installer:release \
+          iso ignition embed -fi install_dir/worker.ign isos/rhcos-live-worker.iso
+          chmod -R 755 isos/
+      when: install_type is defined and install_type == 'single_node'
+
+    - name: Moving ISOs
+      copy:
+        src:  "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        mode: 0644
+        remote_src: 'true'
+      with_items:
+        - { src: isos/rhcos-live-master.iso, dest: /var/www/html/openshift/rhcos-live-master.iso }
+        - { src: isos/rhcos-live-worker.iso, dest: /var/www/html/openshift/rhcos-live-worker.iso }
+      when: install_type is defined and install_type == 'single_node'
 
     - name: Set Kubeconfig env
       lineinfile:
@@ -165,7 +230,8 @@
 
     # Make these files available on the Web server
     - name: Copy all files to www directories
-      shell: cp -R install_dir/*.ign /var/www/html/openshift/
+      shell: |
+        cp -R install_dir/*.ign /var/www/html/openshift/
 
     - name: Change www ownership
       file: 
