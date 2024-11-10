@@ -33,9 +33,15 @@ options {
 	recursion yes;
 	
 	forwarders {
-                8.8.8.8;
-                8.8.4.4;
-        };
+{% if dns.forwarders | length > 0 %}    
+{% for forwarder in dns.forwarders %}
+		{{ forwarder }};
+{% endfor %}
+{% else %}
+		8.8.8.8;
+		8.8.4.4;
+{% endif %}
+	};
 
 	dnssec-validation yes;
 
